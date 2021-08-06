@@ -43,7 +43,6 @@ const config = yargs(hideBin(process.argv))
           description: "Watch files for changes",
         }),
     (argv) => {
-      console.log(argv);
       watch({
         to: argv.piers as string[],
         src: "urbit",

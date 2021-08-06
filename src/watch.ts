@@ -1,4 +1,4 @@
-import _ from "lodash/fp";
+import _ from "lodash";
 import chokidar from "chokidar";
 import axios from "axios";
 import fs from "fs/promises";
@@ -21,7 +21,6 @@ async function copyFile(src: string, to: string[]) {
 
 export async function watch(options: CopyOptions) {
   const { src, to } = options;
-  let ready = false;
   const piers: Pier[] = _.compact(
     await Promise.all(
       to.map(async (desk: string) => {
@@ -50,8 +49,8 @@ export async function watch(options: CopyOptions) {
     )
   );
 
-  const commit = async () => {
-    if (options?.noCommit || !ready) {
+  const commit = _.debounce(async () => {
+    if (options?.noCommit) {
       return;
     }
     await Promise.all(
@@ -67,7 +66,7 @@ export async function watch(options: CopyOptions) {
         return axios.post(`http://localhost:${port}`, payload, {});
       })
     );
-  };
+  }, 100);
   const paths = ["vendor", src];
   const watcher = chokidar.watch(paths, {
     persistent: options.watch,
@@ -87,7 +86,6 @@ export async function watch(options: CopyOptions) {
   });
 
   watcher.on("ready", async () => {
-    ready = true;
     await commit();
     if (!options.watch) {
       process.exit(0);
