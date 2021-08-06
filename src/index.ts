@@ -7,9 +7,13 @@ const config = yargs(hideBin(process.argv))
   .command(
     "install",
     "Install dependencies",
-    () => {},
+    (yargs) =>
+      yargs.option("ci", {
+        type: "boolean",
+        description: "Fail on lockfile change",
+      }),
     (argv) => {
-      install()
+      install(argv.ci)
         .then(() => {
           process.exit(0);
         })
@@ -47,10 +51,4 @@ const config = yargs(hideBin(process.argv))
         noCommit: argv["no-commit"],
       });
     }
-  )
-  .option("ci", {
-    type: "boolean",
-    description: "Fail on lockfile change",
-  }).argv;
-
-console.log(config);
+  ).argv;

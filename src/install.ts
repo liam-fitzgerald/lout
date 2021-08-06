@@ -5,19 +5,20 @@ import { LoutFile, LoutDeps } from "./types";
 import Ajv from "ajv";
 const ajv = new Ajv();
 import _ from "lodash";
+import crypto from "crypto";
 
 import f from "lodash/fp";
 import axios from "axios";
 import { PathLike } from "fs";
 
 const location = path.resolve(process.cwd(), "./lout.json");
+const lockLocation = path.resolve(process.cwd(), "./lout.lock.json");
 const validate = ajv.compile<LoutFile>(schema);
 
 const getDeps: (deps: LoutDeps) => Promise<LoutDeps> = f.flow(
   f.toPairs,
   f.map(async ([path, url]): Promise<[string, string]> => {
     const { data } = await axios.get(url);
-    console.log(url);
     return [path, data];
   }),
   (x) => Promise.all<[string, string]>(x),
@@ -43,18 +44,46 @@ const constructVendorTree = async (deps: LoutDeps) => {
   }
 };
 
-export async function install() {
+async function fileExists(path: PathLike) {
+  try {
+    await fs.access(path);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function getLockfile(): Promise<null | { [url: string]: string }> {
+  if (!(await fileExists(lockLocation))) {
+    console.log("No lockfile, generating a fresh one");
+    return null;
+  }
+  return JSON.parse((await fs.readFile(lockLocation)).toString("utf8"));
+}
+
+function hashString(str: string) {
+  return crypto.createHash("sha256").update(str).digest("base64");
+}
+
+function generateLockfile(deps: LoutDeps) {
+  return _.mapValues(deps, hashString);
+}
+
+export async function install(ci = false) {
   const file = JSON.parse((await fs.readFile(location)).toString("utf8"));
   if (validate(file)) {
     try {
-      console.log(file.dependencies);
       const deps = await getDeps(file.dependencies);
+      const lockfile = await getLockfile();
+      const newLockfile = generateLockfile(deps);
+      if (ci && !_.isEqual(lockfile, newLockfile)) {
+        throw new Error("Aborting, bad lockfile");
+      }
+      await fs.writeFile(lockLocation, JSON.stringify(newLockfile));
       await constructVendorTree(deps);
-      console.log("Finished installing");
     } catch (e) {
-      console.log("a");
       console.error(e);
-      throw new Error("Unable to fetch dependencies");
+      throw e;
     }
   } else {
     throw new Error("Bad lout.json file format");

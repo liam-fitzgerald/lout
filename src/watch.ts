@@ -88,7 +88,6 @@ export async function watch(options: CopyOptions) {
 
   watcher.on("ready", async () => {
     ready = true;
-    console.log("commited");
     await commit();
     if (!options.watch) {
       process.exit(0);
