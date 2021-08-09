@@ -87,3 +87,10 @@ export function JSONparse<T = any>(json: string): LoutTask<T> {
     () => new UnknownError("unable to parse JSON")
   );
 }
+
+export const log =
+  <T>(str: string | ((arg: T) => string)) =>
+  (args: T) => {
+    console.log(typeof str === "string" ? str : str(args));
+    return args;
+  };

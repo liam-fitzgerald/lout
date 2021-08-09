@@ -5,6 +5,7 @@ import _ from "lodash";
 import { pipe } from "fp-ts/lib/function";
 import * as a from "fp-ts/lib/ReadonlyArray";
 import { fileExists, JSONparse, readFile, sha, writeFile } from "../util";
+import chalk from "chalk";
 
 const lockLocation = path.resolve(process.cwd(), "./lout.lock.json");
 
@@ -17,12 +18,9 @@ const genLockfile = (deps: readonly LoutDep[]): Record<string, string> =>
     {}
   );
 
-const writeLockfile = (ci: boolean) => (deps: readonly LoutDep[]) =>
-  pipe(
-    genLockfile(deps),
-    JSON.stringify.bind(JSON),
-    (file) => writeFile(lockLocation, file),
-    t.map(() => deps)
+const writeLockfile = (ci: boolean) => (lockfile: Record<string, string>) =>
+  pipe(lockfile, JSON.stringify.bind(JSON), (file) =>
+    writeFile(lockLocation, file)
   );
 
 export const handleLockfile: (
@@ -31,33 +29,24 @@ export const handleLockfile: (
   (ci) => (deps) =>
     pipe(
       readLockfile,
-      t.map(lockDeps(deps)),
-      t.chain(validateHashes(ci)),
-      t.chain(writeLockfile(ci))
+      t.chain(lockDeps(ci, deps)),
+      t.chain(writeLockfile(ci)),
+      t.map(() => deps)
     );
 
 const lockDeps =
-  (deps: readonly LoutDep[]) =>
-  (lockfile: Record<string, string> | null): readonly LoutDep[] => {
-    if (!lockfile) {
-      return deps;
+  (ci: boolean, deps: readonly LoutDep[]) =>
+  (
+    lockfile: Record<string, string> | null
+  ): LoutTask<Record<string, string>> => {
+    const newLockfile = genLockfile(deps);
+    if (!_.isEqual(lockfile, newLockfile)) {
+      if(ci) {
+        return t.left(new LockfileError("Lockfile does not match"));
+      }
+      console.log(chalk`{yellow Updating lockfile...}`)
     }
-    const pairs = _.toPairs(lockfile);
-    return _.reduce(
-      pairs,
-      (acc, [path, hash]) => {
-        const index = acc.findIndex(({ path: depPath }) => path === depPath);
-        if (index >= 0) {
-          return [
-            ...acc.slice(0, index),
-            { ...acc[index], hash },
-            ...acc.slice(index + 1),
-          ];
-        }
-        return acc;
-      },
-      deps
-    );
+    return t.right(newLockfile);
   };
 
 const checkHash = (dep: LoutDep) => {
@@ -69,20 +58,6 @@ const checkHash = (dep: LoutDep) => {
   }
   return false;
 };
-
-const validateHashes =
-  (ci: boolean) =>
-  (deps: readonly LoutDep[]): LoutTask<readonly LoutDep[]> => {
-    if (!ci) {
-      return t.right(deps);
-    }
-    const failed = pipe(deps, a.filter(checkHash));
-    if (failed.length > 0) {
-      return t.left(new LockfileError("Hashes do not match"));
-    }
-    return t.right(deps);
-  };
-
 const parseLockfile = (file: string | null) =>
   file ? JSONparse<Record<string, string>>(file) : t.right(null);
 

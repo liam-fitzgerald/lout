@@ -19,10 +19,11 @@ import f from "lodash/fp";
 import * as t from "fp-ts/TaskEither";
 import * as e from "fp-ts/Either";
 import { pipe, flow } from "fp-ts/function";
-import { sha, fileExists, httpGet, parentFolder, readFile } from "../util";
+import { log, parentFolder, readFile } from "../util";
 import { Either } from "fp-ts/lib/Either";
 import { getDeps } from "./fetch";
 import { handleLockfile } from "./lock";
+import chalk from "chalk";
 
 const location = path.resolve(process.cwd(), "./lout.json");
 const validate = ajv.compile<LoutFile>(schema);
@@ -72,7 +73,9 @@ export const install = (ci: boolean): LoutTask<any> =>
   pipe(
     readPackages,
     t.map(fileToDepSpecs),
+    t.map(log((deps) => `Installing ${deps.length} files...`)),
     t.chain(getDeps),
-    t.chain(handleLockfile(false)),
-    t.chain(constructVendorTree)
+    t.map(log(`Finished fetching dependencies...`)),
+    t.chain(handleLockfile(ci)),
+    t.chain(constructVendorTree),
   );
