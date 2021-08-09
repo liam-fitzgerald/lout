@@ -2,6 +2,7 @@ import yargs from "yargs/yargs";
 import { hideBin } from "yargs/helpers";
 import { install } from "./install";
 import { watch } from "./watch";
+import * as e from 'fp-ts/Either';
 
 const config = yargs(hideBin(process.argv))
   .command(
@@ -13,14 +14,10 @@ const config = yargs(hideBin(process.argv))
         description: "Fail on lockfile change",
       }),
     (argv) => {
-      install(argv.ci)
-        .then(() => {
-          process.exit(0);
-        })
-        .catch((err) => {
-          console.error(err.message);
-          process.exit(1);
-        });
+      const run = install(argv.ci || false);
+      run().then(e.fold(err => {
+
+      }, () => {}));
     }
   )
   .command(
